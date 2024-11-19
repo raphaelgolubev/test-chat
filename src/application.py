@@ -1,7 +1,16 @@
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, FileResponse
+from typing import Dict, List
 
 
 app = FastAPI()
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Хранение активных пользователей
+active_users: Dict[str, WebSocket] = {}
+
+
+@app.get("/")
+async def root():
+    return FileResponse("static/index.html")
+
