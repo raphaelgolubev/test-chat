@@ -1,0 +1,25 @@
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Папки виртуальных окружений
+venv/
+env/
+.venv/
+
+# Файлы кэша
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# Файлы логов
+*.log
+
+# Прочие файлы
+*.md
+.git
+*.gitignore
+README.md
+LICENSE
+./postgres-data

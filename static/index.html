@@ -1,33 +1,153 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <title>Chat Room</title>
-    </head>
-    <body>
-        <h1>WebSocket Chat Room</h1>
-        <textarea id="messages" cols="100" rows="20"></textarea><br>
-        <input id="nickname" type="text" placeholder="Enter your nickname"><br>
-        <input id="message" type="text" placeholder="Enter your message"><br>
-        <button onclick="sendMessage()">Send</button>
-        <script>
-            const ws = new WebSocket("ws://localhost:8000/ws");
-            ws.onmessage = function(event) {
-                const messages = document.getElementById('messages');
-                messages.value += event.data + '\n';
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Чат</title>
+    <style>
+        body { font-family: Arial, sans-serif; }
+        #messages { border: 1px solid #ccc; height: 300px; overflow-y: scroll; margin-bottom: 10px; }
+        #message-input { width: 80%; }
+    </style>
+</head>
+<body>
+
+<h1>Чат</h1>
+<div id="messages"></div>
+<input id="nickname" type="text" placeholder="Ваш никнейм" />
+<button id="set-nickname">Присоединиться</button>
+
+<fieldset id="receiver-select">
+    <legend>Выберите пользователей:</legend>
+    <!-- <div>
+      <input type="checkbox" id="all" name="all" checked/>
+      <label for="all">Отправить всем</label>
+    </div> -->
+</fieldset>
+
+<br><br>
+<input id="message-input" type="text" placeholder="Ваше сообщение" />
+<button id="send-message">Отправить</button>
+
+<script>
+    let socket;
+    let timer;
+    let currentUser;
+    const messagesDiv = document.getElementById("messages");
+    const nicknameInput = document.getElementById("nickname");
+    const messageInput = document.getElementById("message-input");
+    const setNicknameButton = document.getElementById("set-nickname");
+    const sendMessageButton = document.getElementById("send-message");
+    const receiverSelect = document.getElementById("receiver-select");
+
+    function check_status() {
+        if (socket) {
+            status_request = JSON.stringify({ type: "receive_status" });
+            socket.send(status_request);
+        }
+    }
+
+    setNicknameButton.onclick = function() {
+        const nickname = nicknameInput.value;
+        if (nickname) {
+            socket = new WebSocket("ws://localhost:8000/ws");
+
+            socket.onopen = function() {
+                let hello = JSON.stringify({ type: "hello", data: { user: nickname } });
+                console.log("Hello message:", hello);
+                socket.send(hello);
+                // Проверка статуса клиента
+                timer = setInterval(check_status, 1000);
             };
-            function sendMessage() {
-                const nickname = document.getElementById('nickname').value;
-                const message = document.getElementById('message').value;
-                const msg = {
-                    type: "send_message",
-                    data: {
-                        text: message,
-                        receivers: []
-                    }
-                };
-                ws.send(JSON.stringify(msg));
-                document.getElementById('message').value = '';
+
+            socket.onmessage = function(event) {
+                const message = JSON.parse(event.data);
+                displayMessage(message);
+            };
+
+            socket.onclose = function() {
+                clearInterval(timer);
+                displayMessage({ type: "error", data: { message: "Соединение закрыто" } });
+            };
+
+            setNicknameButton.disabled = true;
+            currentUser = document.getElementById("nickname").value;
+        } else {
+            alert("Введите никнейм!");
+        }
+    };
+
+    sendMessageButton.onclick = function() {
+        const text = messageInput.value;
+        // Получаем все выбранные чекбоксы
+        const receivers = Array.from(receiverSelect.querySelectorAll("input[type='checkbox']:checked")).map(checkbox => checkbox.id);
+        console.log("Получатели:", receivers);
+        if (text) {
+            socket.send(JSON.stringify({ type: "send_message", data: { receivers: receivers, text: text } }));
+            messageInput.value = ""; // Очищаем поле ввода после отправки
+        }
+    };
+
+    function displayMessage(message) {
+        const messageText = document.createElement("div");
+        if (message.type === "receive_message") {
+            let sender = message.data.sender;
+            if (sender === currentUser) {
+                sender = "Вы";
             }
-        </script>
-    </body>
+            messageText.textContent = `${sender} (${new Date(message.data.timestamp * 1000).toLocaleString()}): ${message.data.text}`;
+        } else if (message.type === "error") {
+            messageText.textContent = `Ошибка: ${message.data.message}`;
+        } else if (message.type === "chat_status") {
+            updateReceiverList(message);
+        } else if (message.type === "user_connected") {
+            messageText.textContent = `${message.client_id} подключился к чату`;
+        } else if (message.type === "user_disconnected") {
+            messageText.textContent = `${message.client_id} отключился из чата`;
+        }
+        messagesDiv.appendChild(messageText);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Прокручиваем вниз
+    }
+
+    function updateReceiverList(message) {
+        // Список пользователей от сервера
+        active_clients = message.data.active_clients
+
+        // Сначала, удаляем все элементы, которых нет в массиве active_clients
+        const currentClients = Array.from(receiverSelect.children).map(child => child.id);
+            currentClients.forEach(clientId => {
+                if (!active_clients.includes(clientId.replace("client_", ""))) {
+                    // Удаляем элемент, если он не в активных клиентах
+                    const elementToRemove = document.getElementById(clientId);
+                    if (elementToRemove) {
+                        receiverSelect.removeChild(elementToRemove);
+                    }
+                }
+            });
+
+        // Затем обновляем список для добавления новых пользователей
+        active_clients.forEach(client => {
+            let search = document.getElementById("client_" + client);
+            // Проверяем, существует ли элемент с таким id, если нет - создаем новые элементы
+            if (!search && currentUser !== client) {
+                const container = document.createElement("div");
+                container.id = "client_" + client;
+                const select = document.createElement("input");
+                select.type = "checkbox";
+                select.id = client;
+                select.name = client;
+
+                const label = document.createElement("label");
+                label.htmlFor = client;
+                label.textContent = client;
+
+                container.appendChild(label);
+                container.appendChild(select);
+                receiverSelect.appendChild(container);
+            }
+        });
+    }
+</script>
+
+</body>
 </html>
