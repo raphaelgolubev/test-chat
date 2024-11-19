@@ -21,7 +21,7 @@ class ChatManager:
 
     async def wait_hello(self, websocket: WebSocket) -> HelloMessage:
         """
-        Ожидает 10 секунды, пока не придет сообщение с типом "hello".
+        Ожидает 10 секунд, пока не придет сообщение с типом "hello".
         В случае успешного получения сообщения, возвращает его.
         
         ### Param:

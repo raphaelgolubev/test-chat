@@ -27,6 +27,9 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             await manager.receive(websocket)
 
+    except InvalidHelloError:
+        await websocket.close()
+
     except ConnectionTimeoutError:
         await websocket.close()
         manager.disconnect()
